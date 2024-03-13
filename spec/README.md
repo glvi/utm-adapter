@@ -112,26 +112,19 @@ __Specification:__
 
 _Signaling:_
 - (OpenAPI) Ground control station requests traffic information from UTM service provider.
+  The ground control station specifies the format it will accept: _mavlink_ (default) or _asterix_.
 - (OpenAPI) UTM service provider responds with endpoint information.
+  If the UTM service provider does not support the requested format, it will respond with an error (415).
 
 _Session management:_
 - The aforementioned endpoint would be a QUIC endpoint with QUIC datagram support enabled.
 - The Ground control station establishes a QUIC connection to that endpoint, and then waits for traffic information datagrams.
 - Upon receipt of traffic information, the UTM service provides identifies concerned subscribers and dispatches the traffic information as soon as possible.
-- If no traffic is presently available, the UTM service provider shall keep the connection alive by sending datagrams with possibly bogus payload in the encoding of choice that will effectively keep the connection alive.
+- If no traffic is presently available, the UTM service provider shall keep the connection alive by sending datagrams with a payload akin to a heartbeat in the encoding of choice that will effectively keep the connection alive.
 - If no traffic is available due to faulty equipment, the UTM service provider shall indicate "service unavailable", and close the connection; i.e. send QUIC CONNECTION_CLOSE frame w/ error code 0x1d, and reason phrase "service unavailable".
 
 _Presentation:_
 - Traffic information is encoded in QUIC datagrams as follows.
-
-  The traffic information payload is prefixed by a 64-bit magic number that identifies the traffic information encoding in the payload section.
-
-  The following magic numbers are recognised:
-
-  Magic number|Alternative MN | Encoding
-  ---|---|---
-  0x4153544552495820 | 0x2058495245545341 | ASTERIX
-  0x4d41564c494e4b20 | 0x204b4e494c56414d | MAVLINK
 
   QUIC DATAGRAM frame (w/o length field):
   ```
@@ -147,21 +140,14 @@ _Presentation:_
   +-------+---------+-----------+
   ```
 
-  Traffic information datagram frame data field (TIH: traffic information header, TI: traffic information):
-  ```
-  +----------+---------+
-  | TIH (64) | TI (..) |
-  +----------+---------+
-  ```
-
   For the following two cases (ASTERIX, MAVLINK), specifying length in the datagram frame is optional.
 
   ASTERIX Traffic information datagram data
   (see [All-purpose structured EUROCONTROL surveillance information exchange](https://www.eurocontrol.int/asterix))
   ```
-  +--------------------+------------+-------------+
-  | 0x4153544552495820 | FSPEC (..) | Fields (..) |
-  +--------------------+------------+-------------+
+  +------------+-------------+
+  | FSPEC (..) | Fields (..) |
+  +------------+-------------+
   ```
 
   Examples of ASTERIX payload
@@ -172,9 +158,9 @@ _Presentation:_
   MAVLINK Traffic information datagram data
   (see [MAVLink 2 Packet Format](https://mavlink.io/en/guide/serialization.html#mavlink2_packet_format))
   ```
-  +--------------------+------+---------+---------+---------+---------+-----------+------------+
-  | 0x4d41564c494e4b20 | 0xfd | LEN (8) | INC (8) | CMP (8) | SEQ (8) | SYSID (8) | COMPID (8) |…
-  +--------------------+------+---------+---------+---------+---------+-----------+------------+
+  +------+---------+---------+---------+---------+-----------+------------+
+  | 0xfd | LEN (8) | INC (8) | CMP (8) | SEQ (8) | SYSID (8) | COMPID (8) |…
+  +------+---------+---------+---------+---------+-----------+------------+
   +------------+--------------+------------+-----------+
   | MSGID (24) | PAYLOAD (..) | CKSUM (16) | SIG (104) |
   +------------+--------------+------------+-----------+
@@ -190,11 +176,13 @@ At the time of writing, there were no technical standards available explicitly a
 
 There were a few technical specification that address parts of the problem.
 
-One such technical specification was [EUROCONTROL ASTERIX Cat. 21](https://www.eurocontrol.int/publication/cat021-eurocontrol-specification-surveillance-data-exchange-asterix-part-12-category-21) which addresses the binary encoding of ADS-B position reports.
+One such technical specification was [EUROCONTROL ASTERIX Cat. 21](https://www.eurocontrol.int/publication/cat021-eurocontrol-specification-surveillance-data-exchange-asterix-part-12-category-21) which addresses specifically the binary encoding of ADS-B position reports.
 
-Another was the [MAVLINK specification](https://mavlink.io/en), which could easily be extended with a message set for ADS-B position reports, which also addresses the binary encoding of information.
+Another was the [MAVLINK specification](https://mavlink.io/en) which also addresses the binary encoding of information, and which in its <q>common</q> dialect has a message for ADS-B position reports.
 
-The above two protocols cover the presentation of information, but do not address qualities of service.
+The above two protocols cover the presentation of information, but do not address the required qualities of service.
+
+#### Choice of transport
 
 __(Plain) UDP deemed inappropriate. Reason:__
 
